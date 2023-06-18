@@ -3,7 +3,7 @@ from threading import Event
 from time import sleep
 
 import serial
-from mycroft_bus_client.message import Message
+from ovos_bus_client.message import Message
 from ovos_plugin_manager.phal import PHALPlugin
 from ovos_utils.log import LOG
 
