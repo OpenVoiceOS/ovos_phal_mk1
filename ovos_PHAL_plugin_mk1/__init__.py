@@ -462,9 +462,13 @@ class MycroftMark1(PHALPlugin):
             start = message.data['start']
             visemes = message.data['visemes']
             self.showing_visemes = True
+            previous_end = -1
             for code, end in visemes:
                 if not self.showing_visemes:
                     break
+                if end < previous_end:
+                    start = time.time()
+                previous_end = end
                 if time.time() < start + end:
                     self.writer.write('mouth.viseme=' + code)
                     sleep(start + end - time.time())
