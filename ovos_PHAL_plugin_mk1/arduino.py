@@ -15,7 +15,7 @@ import time
 from queue import Queue
 from threading import Thread
 
-from mycroft_bus_client import Message
+from ovos_bus_client import Message
 from ovos_utils.log import LOG
 from ovos_utils.signal import check_for_signal
 
