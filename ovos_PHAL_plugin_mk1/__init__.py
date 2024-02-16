@@ -4,11 +4,11 @@ from time import sleep
 
 import serial
 from ovos_bus_client.message import Message
-from ovos_utils.enclosure.mark1.faceplate.icons import MusicIcon, WarningIcon, SnowIcon, StormIcon, SunnyIcon, \
-    CloudyIcon, PartlyCloudyIcon, WindIcon, RainIcon, LightRainIcon
 from ovos_utils.log import LOG
 from ovos_utils.network_utils import is_connected
 
+from ovos_mark1.faceplate.icons import MusicIcon, WarningIcon, SnowIcon, StormIcon, SunnyIcon, \
+    CloudyIcon, PartlyCloudyIcon, WindIcon, RainIcon, LightRainIcon
 from ovos_PHAL_plugin_mk1.arduino import EnclosureReader, EnclosureWriter
 from ovos_plugin_manager.phal import PHALPlugin
 
