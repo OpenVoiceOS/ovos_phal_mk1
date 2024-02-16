@@ -12,9 +12,8 @@ setup(
     license='Apache-2.0',
     packages=['ovos_PHAL_plugin_mk1'],
     install_requires=["ovos-plugin-manager>=0.0.24",
-                      "ovos-bus-client",
                       "ovos-mark1-utils>=0.0.0a1",
-                      "ovos-utils>=0.0.37a2",
+                      "ovos-utils>=0.0.38",
                       "pyserial~=3.0"],
     zip_safe=True,
     classifiers=[
