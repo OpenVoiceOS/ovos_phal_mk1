@@ -4,7 +4,7 @@ from setuptools import setup
 PLUGIN_ENTRY_POINT = 'ovos-phal-mk1=ovos_PHAL_plugin_mk1:MycroftMark1'
 setup(
     name='ovos-PHAL-plugin-mk1',
-    version='0.0.1a4',
+    version='0.0.1a5',
     description='A PHAL plugin for mycroft',
     url='https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1',
     author='JarbasAi',
