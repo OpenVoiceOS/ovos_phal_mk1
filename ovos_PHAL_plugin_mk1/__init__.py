@@ -4,6 +4,7 @@ from time import sleep
 
 import serial
 from ovos_bus_client.message import Message
+from ovos_utils import create_daemon
 from ovos_utils.log import LOG
 from ovos_utils.network_utils import is_connected
 
@@ -461,19 +462,25 @@ class MycroftMark1(PHALPlugin):
         if message and message.data:
             start = message.data['start']
             visemes = message.data['visemes']
-            self.showing_visemes = True
-            previous_end = -1
-            for code, end in visemes:
-                if not self.showing_visemes:
-                    break
-                if end < previous_end:
-                    start = time.time()
-                previous_end = end
-                if time.time() < start + end:
-                    self.writer.write('mouth.viseme=' + code)
-                    sleep(start + end - time.time())
-            self.writer.write("mouth.reset")
-            self.showing_visemes = False
+
+            def animate_mouth():
+                nonlocal start, visemes
+                self.showing_visemes = True
+                previous_end = -1
+                for code, end in visemes:
+                    if not self.showing_visemes:
+                        break
+                    if end < previous_end:
+                        start = time.time()
+                    previous_end = end
+                    if time.time() < start + end:
+                        self.writer.write('mouth.viseme=' + code)
+                        sleep(start + end - time.time())
+                self.writer.write("mouth.reset")
+                self.showing_visemes = False
+
+            # use a thread to not block FakeBus (eg, voice sat)
+            create_daemon(animate_mouth)
 
     def on_text(self, message=None):
         """Display text (scrolling as needed)
