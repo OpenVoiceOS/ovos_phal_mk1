@@ -464,6 +464,7 @@ class MycroftMark1(PHALPlugin):
             visemes = message.data['visemes']
 
             def animate_mouth():
+                nonlocal start, visemes
                 self.showing_visemes = True
                 previous_end = -1
                 for code, end in visemes:
