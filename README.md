@@ -4,7 +4,7 @@ handles integration with the Mycroft Mark1 hardware
 
 the firmware can be found in the original repository [MycroftAI/enclosure-mark1](https://github.com/MycroftAI/enclosure-mark1)
 
-utits to interact with the faceplate pixel by pixel can be found in [ovos-utils.enclosure.mk1](https://github.com/OpenVoiceOS/ovos-utils/tree/dev/ovos_utils/enclosure/mark1) 
+utits to interact with the faceplate pixel by pixel can be found in [ovos-mark1-utils](https://github.com/OpenVoiceOS/ovos-mark1-utils) 
 
 # Serial Port Protocols
 
