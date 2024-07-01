@@ -2,7 +2,7 @@
 
 handles integration with the Mycroft Mark1 hardware
 
-the firmware can be found in the original repository [MycroftAI/enclosure-mark1](https://github.com/MycroftAI/enclosure-mark1)
+the firmware for mark1 arduino that controls the eyes and faceplate can be found [here](https://github.com/OpenVoiceOS/mycroft-mark1-firmware)
 
 utits to interact with the faceplate pixel by pixel can be found in [ovos-mark1-utils](https://github.com/OpenVoiceOS/ovos-mark1-utils) 
 
