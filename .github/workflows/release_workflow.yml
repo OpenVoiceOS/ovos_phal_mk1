@@ -16,6 +16,8 @@ jobs:
       publish_prerelease: true
       publish_pypi: true
       changelog_max_issues: 100
+    permissions:
+      id-token: write
 
   propose_release:
     needs: publish_alpha

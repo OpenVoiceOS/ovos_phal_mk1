@@ -13,6 +13,8 @@ jobs:
       setup_py: 'setup.py'
       publish_release: true
       publish_pypi: true
+    permissions:
+      id-token: write
 
   sync_dev:
     needs: publish_stable
