@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
+import os
 from os.path import join, dirname
 
 from setuptools import setup
 
+BASEDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+def required(requirements_file):
+    """ Read requirements file and remove comments and empty lines. """
+    with open(os.path.join(BASEDIR, requirements_file), 'r') as f:
+        requirements = f.read().splitlines()
+        if 'MYCROFT_LOOSE_REQUIREMENTS' in os.environ:
+            print('USING LOOSE REQUIREMENTS!')
+            requirements = [r.replace('==', '>=').replace('~=', '>=') for r in requirements]
+        return [pkg for pkg in requirements
+                if pkg.strip() and not pkg.startswith("#")]
+
 
 def get_version():
     """ Find the version of this skill"""
-    version_file = join(dirname(__file__), 'ovos_PHAL_plugin_mk1/version.py')
+    version_file = join(BASEDIR, 'ovos_PHAL_plugin_mk1/version.py')
     major, minor, build, alpha = (None, None, None, None)
     with open(version_file) as f:
         for line in f:
@@ -38,10 +52,7 @@ setup(
     author_email='jarbasai@mailfence.com',
     license='Apache-2.0',
     packages=['ovos_PHAL_plugin_mk1'],
-    install_requires=["ovos-plugin-manager>=0.0.24",
-                      "ovos-mark1-utils>=0.0.0a2",
-                      "ovos-utils>=0.0.38",
-                      "pyserial~=3.0"],
+    install_requires=required("requirements.txt"),
     zip_safe=True,
     classifiers=[
         'Development Status :: 3 - Alpha',
