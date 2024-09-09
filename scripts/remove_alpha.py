@@ -3,8 +3,7 @@ on merge to master -> declare stable (remove alpha)
 """
 import argparse
 import fileinput
-import sys
-from os.path import abspath, join, dirname
+from os.path import abspath
 
 
 def update_alpha(version_file):

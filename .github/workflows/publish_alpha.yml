@@ -93,7 +93,7 @@ jobs:
 
       - name: Update version in version.py
         run: |
-          python scripts/update_version.py ${{ steps.version_bump.outputs.part }} --version-file $GITHUB_WORKSPACE/version.py
+          python scripts/update_version.py ${{ steps.version_bump.outputs.part }} --version-file "$GITHUB_WORKSPACE/version.py"
 
       - name: "Generate release changelog"
         uses: heinrichreimer/github-changelog-generator-action@v2.3

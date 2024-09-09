@@ -32,7 +32,7 @@ jobs:
           python -m pip install build wheel
       - name: Remove Alpha tag
         run: |
-          python scripts/remove_alpha.py --version-file $GITHUB_WORKSPACE/version.py
+          python scripts/remove_alpha.py --version-file "$GITHUB_WORKSPACE/version.py"
       - name: "Generate release changelog"
         uses: heinrichreimer/github-changelog-generator-action@v2.3
         with:

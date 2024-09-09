@@ -4,7 +4,6 @@ on merge to dev:
 - on merge to dev, update version.py string to enforce semver
 """
 
-import sys
 import argparse
 from os.path import abspath
 
