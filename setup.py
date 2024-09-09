@@ -1,10 +1,37 @@
 #!/usr/bin/env python3
+from os.path import join, dirname
+
 from setuptools import setup
+
+
+def get_version():
+    """ Find the version of this skill"""
+    version_file = join(dirname(__file__), 'ovos_PHAL_plugin_mk1/version.py')
+    major, minor, build, alpha = (None, None, None, None)
+    with open(version_file) as f:
+        for line in f:
+            if 'VERSION_MAJOR' in line:
+                major = line.split('=')[1].strip()
+            elif 'VERSION_MINOR' in line:
+                minor = line.split('=')[1].strip()
+            elif 'VERSION_BUILD' in line:
+                build = line.split('=')[1].strip()
+            elif 'VERSION_ALPHA' in line:
+                alpha = line.split('=')[1].strip()
+
+            if ((major and minor and build and alpha) or
+                    '# END_VERSION_BLOCK' in line):
+                break
+    version = f"{major}.{minor}.{build}"
+    if int(alpha):
+        version += f"a{alpha}"
+    return version
+
 
 PLUGIN_ENTRY_POINT = 'ovos-phal-mk1=ovos_PHAL_plugin_mk1:MycroftMark1'
 setup(
     name='ovos-PHAL-plugin-mk1',
-    version='0.0.1a5',
+    version=get_version(),
     description='A PHAL plugin for mycroft',
     url='https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1',
     author='JarbasAi',
