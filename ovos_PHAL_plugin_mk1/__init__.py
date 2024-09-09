@@ -3,11 +3,15 @@ from threading import Event
 from time import sleep
 
 import serial
-from mycroft_bus_client.message import Message
-from ovos_plugin_manager.phal import PHALPlugin
+from ovos_bus_client.message import Message
+from ovos_utils import create_daemon
 from ovos_utils.log import LOG
+from ovos_utils.network_utils import is_connected
 
+from ovos_mark1.faceplate.icons import MusicIcon, WarningIcon, SnowIcon, StormIcon, SunnyIcon, \
+    CloudyIcon, PartlyCloudyIcon, WindIcon, RainIcon, LightRainIcon
 from ovos_PHAL_plugin_mk1.arduino import EnclosureReader, EnclosureWriter
+from ovos_plugin_manager.phal import PHALPlugin
 
 
 # The Mark 1 hardware consists of a Raspberry Pi main CPU which is connected
@@ -26,6 +30,7 @@ class MycroftMark1Validator:
         If it returns False the plugin is not loaded.
         This allows a plugin to run platform checks"""
         # TODO how to detect if running in a mark1 ?
+        #  detect "/dev/ttyAMA0" ?
         return True
 
 
@@ -47,70 +52,110 @@ class MycroftMark1(PHALPlugin):
     def __init__(self, bus=None, config=None):
         super().__init__(bus=bus, name="ovos-PHAL-plugin-mk1", config=config)
         self.stopped = Event()
-        self.config = {
-            "port": "",
-            "rate": "",
-            "timeout": 5
-        }  # TODO
-
+        self.config = config or {
+            "port": "/dev/ttyAMA0",
+            "rate": 9600,
+            "timeout": 5.0
+        }
         self.__init_serial()
-        self.reader = EnclosureReader(self.serial, self.bus)
+        self.reader = EnclosureReader(self.serial, self.bus, self.handle_button_press)
         self.writer = EnclosureWriter(self.serial, self.bus)
 
         self._num_pixels = 12 * 2
         self._current_rgb = [(255, 255, 255) for i in range(self._num_pixels)]
+        self.showing_visemes = False
+        self.speaking = False
+        self.listening = False
 
-        self.writer.write("eyes.reset")
-        self.writer.write("mouth.reset")
+        LOG.debug("clearing eyes and mouth")
+        self.__reset()
 
-        self.bus.on("system.factory.reset.ping",
-                    self.handle_register_factory_reset_handler)
-        self.bus.on("system.factory.reset.phal",
-                    self.handle_factory_reset)
-        self.bus.on("mycroft.not.paired", self.handle_not_paired)
-        self.bus.on("mycroft.paired", self.handle_paired)
-        self.bus.on("mycroft.pairing.code", self.handle_pairing_code)
+        # TODO settings
+        #  - default eye color
+        #  - narrow / half / full eyes default position
+        self._init_animation()
+
+        self.bus.on("system.factory.reset.ping", self.handle_register_factory_reset_handler)
+        self.bus.on("system.factory.reset.phal", self.handle_factory_reset)
+
+        self.bus.on("mycroft.internet.connected", self.on_display_reset)
+        self.bus.on("mycroft.stop", self.on_display_reset)
+        self.bus.on("ovos.common_play.play", self.on_music)
+        self.bus.on("ovos.common_play.stop", self.on_display_reset)
+        self.bus.on("mycroft.audio.service.play", self.on_music)
+        self.bus.on("mycroft.audio.service.stop", self.on_display_reset)
+
         self.bus.emit(Message("system.factory.reset.register",
                               {"skill_id": "ovos-phal-plugin-mk1"}))
 
-    def handle_not_paired(self, message):
-        # Make sure pairing info stays on display
-        # TODO - make this public in OPN
-        self._deactivate_mouth_events()
-        pairing_url = message.data.get("pairing_url") or "home.mycroft.ai"
-        message.data["text"] = pairing_url + "      "
-        self.on_text(message)
+    def _init_animation(self):
+        # change eye color
+        r = 0
+        g = 0
+        b = 255
+        color = (r * 65536) + (g * 256) + b
+        self._current_rgb = [(r, g, b) for i in range(self._num_pixels)]
+        self.writer.write("eyes.color=" + str(color))
 
-    def handle_pairing_code(self, message):
-        # Make sure pairing code stays on display
-        # TODO - make this public in OPN
-        self._deactivate_mouth_events()
-        code = message.data["code"]
-        message.data["text"] = code
-        self.on_text(message)
+        # narrow eyes while we do system checks
+        self.on_eyes_narrow()
 
-    def handle_paired(self, message):
-        # reenable mouth events
-        # TODO - make this public in OPN
-        self._activate_mouth_events()  # clears the display
+        # signal no internet
+        if not is_connected():
+            self.on_no_internet()
+
+        # if core is ready, reset eyes
+        self.bus.once("mycroft.ready", self.on_eyes_reset)
+        if self._check_services_ready():
+            self.on_eyes_reset()
+
+    def _check_services_ready(self):
+        """Report if all specified services are ready.
+
+        services (iterable): service names to check.
+        """
+        services = {k: False for k in ["skills",  # ovos-core
+                                       "audio",  # ovos-audio
+                                       "voice"  # ovos-dinkum-listener
+                                       ]}
+
+        for ser, rdy in services.items():
+            if rdy:
+                # already reported ready
+                continue
+            response = self.bus.wait_for_response(
+                Message(f'mycroft.{ser}.is_ready',
+                        context={"source": "mk1", "destination": "skills"}))
+            if response and response.data['status']:
+                services[ser] = True
+        return all([services[ser] for ser in services])
 
     def __init_serial(self):
+        LOG.info("Connecting to mark1 faceplate")
         try:
-            self.port = self.config.get("port")
-            self.rate = self.config.get("rate")
-            self.timeout = self.config.get("timeout")
+            self.port = self.config.get("port", "/dev/ttyAMA0")
+            self.rate = self.config.get("rate", 9600)
+            self.timeout = self.config.get("timeout", 5.0)
             self.serial = serial.serial_for_url(
                 url=self.port, baudrate=self.rate, timeout=self.timeout)
             LOG.info("Connected to: %s rate: %s timeout: %s" %
                      (self.port, self.rate, self.timeout))
-        except Exception:
-            LOG.error("Impossible to connect to serial port: " +
-                      str(self.port))
+        except Exception as e:
+            LOG.exception(f"Impossible to connect to serial: {self.port}")
             raise
 
     def __reset(self, message=None):
         self.writer.write("eyes.reset")
         self.writer.write("mouth.reset")
+
+    def handle_button_press(self):
+        if self.speaking or self.listening:
+            self.bus.emit(Message("mycroft.stop"))
+        else:
+            self.bus.emit(Message("mycroft.mic.listen"))
+
+    def on_music(self, message=None):
+        MusicIcon(bus=self.bus).display()
 
     def handle_get_color(self, message):
         """Get the eye RGB color for all pixels
@@ -130,8 +175,29 @@ class MycroftMark1(PHALPlugin):
                                     {"skill_id": "ovos-phal-plugin-mk1"}))
 
     # Audio Events
+    def on_record_begin(self, message=None):
+        # NOTE: ignore self._mouth_events, listening should ALWAYS be obvious
+        self.listening = True
+        self.on_listen(message)
+
+    def on_record_end(self, message=None):
+        self.listening = False
+        self.on_display_reset(message)
+
+    def on_audio_output_start(self, message=None):
+        self.speaking = True
+        if self._mouth_events:
+            self.on_talk(message)
+
+    def on_audio_output_end(self, message=None):
+        self.speaking = False
+        if self._mouth_events:
+            self.on_display_reset(message)
+
     def on_awake(self, message=None):
-        ''' on wakeup animation '''
+        ''' on wakeup animation
+        triggered by "mycroft.awoken"
+        '''
         self.writer.write("eyes.reset")
         sleep(1)
         self.writer.write("eyes.blink=b")
@@ -140,7 +206,9 @@ class MycroftMark1(PHALPlugin):
         self.writer.write("eyes.level=" + str(self.old_brightness))
 
     def on_sleep(self, message=None):
-        ''' on naptime animation '''
+        ''' on naptime animation
+        triggered by "recognizer_loop:sleep"
+        '''
         # Dim and look downward to 'go to sleep'
         # TODO: Get current brightness from somewhere
         self.old_brightness = 30
@@ -154,28 +222,40 @@ class MycroftMark1(PHALPlugin):
         """The enclosure should restore itself to a started state.
         Typically this would be represented by the eyes being 'open'
         and the mouth reset to its default (smile or blank).
+        triggered by "enclosure.reset"
         """
         self.writer.write("eyes.reset")
         self.writer.write("mouth.reset")
 
     # System Events
     def on_no_internet(self, message=None):
-        pass  # TODO no internet icon
+        """
+        triggered by "enclosure.notify.no_internet"
+        """
+        WarningIcon(bus=self.bus).display()
 
     def on_system_reset(self, message=None):
-        """The enclosure hardware should reset any CPUs, etc."""
+        """The enclosure hardware should reset any CPUs, etc.
+        triggered by "enclosure.system.reset"
+        """
         self.writer.write("system.reset")
 
     def on_system_mute(self, message=None):
-        """Mute (turn off) the system speaker."""
+        """Mute (turn off) the system speaker.
+        triggered by "enclosure.system.mute"
+        """
         self.writer.write("system.mute")
 
     def on_system_unmute(self, message=None):
-        """Unmute (turn on) the system speaker."""
+        """Unmute (turn on) the system speaker.
+        triggered by "enclosure.system.unmute"
+        """
         self.writer.write("system.unmute")
 
     def on_system_blink(self, message=None):
         """The 'eyes' should blink the given number of times.
+        triggered by "enclosure.system.blink"
+
         Args:
             times (int): number of times to blink
         """
@@ -186,14 +266,19 @@ class MycroftMark1(PHALPlugin):
 
     # Eyes messages
     def on_eyes_on(self, message=None):
-        """Illuminate or show the eyes."""
+        """Illuminate or show the eyes.
+        triggered by "enclosure.eyes.on"
+        """
         self.writer.write("eyes.on")
 
     def on_eyes_off(self, message=None):
-        """Turn off or hide the eyes."""
+        """Turn off or hide the eyes.
+        triggered by "enclosure.eyes.off"
+        """
         self.writer.write("eyes.off")
 
     def on_eyes_fill(self, message=None):
+        """triggered by "enclosure.eyes.fill" """
         amount = 0
         if message and message.data:
             percent = int(message.data.get("percentage", 0))
@@ -202,6 +287,7 @@ class MycroftMark1(PHALPlugin):
 
     def on_eyes_blink(self, message=None):
         """Make the eyes blink
+        triggered by "enclosure.eyes.blink"
         Args:
             side (str): 'r', 'l', or 'b' for 'right', 'left' or 'both'
         """
@@ -211,11 +297,14 @@ class MycroftMark1(PHALPlugin):
         self.writer.write("eyes.blink=" + side)
 
     def on_eyes_narrow(self, message=None):
-        """Make the eyes look narrow, like a squint"""
+        """Make the eyes look narrow, like a squint
+        triggered by "enclosure.eyes.narrow"
+        """
         self.writer.write("eyes.narrow")
 
     def on_eyes_look(self, message=None):
         """Make the eyes look to the given side
+        triggered by "enclosure.eyes.look"
         Args:
             side (str): 'r' for right
                         'l' for left
@@ -229,6 +318,7 @@ class MycroftMark1(PHALPlugin):
 
     def on_eyes_color(self, message=None):
         """Change the eye color to the given RGB color
+        triggered by "enclosure.eyes.color"
         Args:
             r (int): 0-255, red value
             g (int): 0-255, green value
@@ -245,6 +335,7 @@ class MycroftMark1(PHALPlugin):
 
     def on_eyes_brightness(self, message=None):
         """Set the brightness of the eyes in the display.
+        triggered by "enclosure.eyes.brightness"
         Args:
             level (int): 1-30, bigger numbers being brighter
         """
@@ -254,11 +345,14 @@ class MycroftMark1(PHALPlugin):
         self.writer.write("eyes.level=" + str(level))
 
     def on_eyes_reset(self, message=None):
-        """Restore the eyes to their default (ready) state."""
+        """Restore the eyes to their default (ready) state
+        triggered by "enclosure.eyes.reset".
+        """
         self.writer.write("eyes.reset")
 
     def on_eyes_timed_spin(self, message=None):
         """Make the eyes 'roll' for the given time.
+        triggered by "enclosure.eyes.timedspin"
         Args:
             length (int): duration in milliseconds of roll, None = forever
         """
@@ -269,6 +363,7 @@ class MycroftMark1(PHALPlugin):
 
     def on_eyes_volume(self, message=None):
         """Indicate the volume using the eyes
+        triggered by "enclosure.eyes.volume"
         Args:
             volume (int): 0 to 11
         """
@@ -278,9 +373,15 @@ class MycroftMark1(PHALPlugin):
         self.writer.write("eyes.volume=" + str(volume))
 
     def on_eyes_spin(self, message=None):
+        """
+        triggered by "enclosure.eyes.spin"
+        """
         self.writer.write("eyes.spin")
 
     def on_eyes_set_pixel(self, message=None):
+        """
+        triggered by "enclosure.eyes.set_pixel"
+        """
         idx = 0
         r, g, b = 255, 255, 255
         if message and message.data:
@@ -294,27 +395,40 @@ class MycroftMark1(PHALPlugin):
 
     # Display (faceplate) messages
     def on_display_reset(self, message=None):
-        """Restore the mouth display to normal (blank)"""
+        """Restore the mouth display to normal (blank)
+        triggered by "enclosure.mouth.reset" / "recognizer_loop:record_end"
+        """
         self.writer.write("mouth.reset")
 
     def on_talk(self, message=None):
-        """Show a generic 'talking' animation for non-synched speech"""
+        """Show a generic 'talking' animation for non-synched speech
+        triggered by "enclosure.mouth.talk"
+        """
         self.writer.write("mouth.talk")
 
     def on_think(self, message=None):
-        """Show a 'thinking' image or animation"""
+        """Show a 'thinking' image or animation
+        triggered by "enclosure.mouth.think"
+        """
         self.writer.write("mouth.think")
 
     def on_listen(self, message=None):
-        """Show a 'thinking' image or animation"""
+        """Show a 'thinking' image or animation
+        triggered by "enclosure.mouth.listen" / "recognizer_loop:record_begin"
+        """
         self.writer.write("mouth.listen")
 
     def on_smile(self, message=None):
-        """Show a 'smile' image or animation"""
+        """Show a 'smile' image or animation
+        triggered by "enclosure.mouth.smile"
+        """
         self.writer.write("mouth.smile")
 
     def on_viseme(self, message=None):
-        """Display a viseme mouth shape for synched speech
+        """Display a viseme mouth shape for synced speech
+
+        triggered by "enclosure.mouth.viseme"
+
         Args:
             code (int):  0 = shape for sounds like 'y' or 'aa'
                          1 = shape for sounds like 'aw'
@@ -329,21 +443,50 @@ class MycroftMark1(PHALPlugin):
             self.writer.write('mouth.viseme=' + code)
 
     def on_viseme_list(self, message=None):
+        """ Send mouth visemes as a list in a single message.
+
+            Args:
+                start (int):    Timestamp for start of speech
+                viseme_pairs:   Pairs of viseme id and cumulative end times
+                                (code, end time)
+
+                                codes:
+                                 0 = shape for sounds like 'y' or 'aa'
+                                 1 = shape for sounds like 'aw'
+                                 2 = shape for sounds like 'uh' or 'r'
+                                 3 = shape for sounds like 'th' or 'sh'
+                                 4 = neutral shape for no sound
+                                 5 = shape for sounds like 'f' or 'v'
+                                 6 = shape for sounds like 'oy' or 'ao'
+        """
         if message and message.data:
             start = message.data['start']
             visemes = message.data['visemes']
-            self.showing_visemes = True
-            for code, end in visemes:
-                if not self.showing_visemes:
-                    break
-                if time.time() < start + end:
-                    self.writer.write('mouth.viseme=' + code)
-                    sleep(start + end - time.time())
-            self.writer.write("mouth.reset")
-            self.showing_visemes = False
+
+            def animate_mouth():
+                nonlocal start, visemes
+                self.showing_visemes = True
+                previous_end = -1
+                for code, end in visemes:
+                    if not self.showing_visemes:
+                        break
+                    if end < previous_end:
+                        start = time.time()
+                    previous_end = end
+                    if time.time() < start + end:
+                        self.writer.write('mouth.viseme=' + code)
+                        sleep(start + end - time.time())
+                self.writer.write("mouth.reset")
+                self.showing_visemes = False
+
+            # use a thread to not block FakeBus (eg, voice sat)
+            create_daemon(animate_mouth)
 
     def on_text(self, message=None):
         """Display text (scrolling as needed)
+
+        triggered by "enclosure.mouth.text"
+
         Args:
             text (str): text string to display
         """
@@ -356,6 +499,9 @@ class MycroftMark1(PHALPlugin):
         """Display images on faceplate. Currently supports images up to 16x8,
            or half the face. You can use the 'x' parameter to cover the other
            half of the faceplate.
+
+       triggered by "enclosure.mouth.display"
+
         Args:
             img_code (str): text string that encodes a black and white image
             x (int): x offset for image
@@ -395,6 +541,8 @@ class MycroftMark1(PHALPlugin):
     def on_weather_display(self, message=None):
         """Show a the temperature and a weather icon
 
+        triggered by "enclosure.weather.display"
+
         Args:
             img_code (char): one of the following icon codes
                          0 = sunny
@@ -413,28 +561,28 @@ class MycroftMark1(PHALPlugin):
             icon = None
             if img_code == 0:
                 # sunny
-                icon = "IICEIBMDNLMDIBCEAA"
+                icon = SunnyIcon(bus=self.bus).encode()
             elif img_code == 1:
                 # partly cloudy
-                icon = "IIEEGBGDHLHDHBGEEA"
+                icon = PartlyCloudyIcon(bus=self.bus).encode()
             elif img_code == 2:
                 # cloudy
-                icon = "IIIBMDMDODODODMDIB"
+                icon = CloudyIcon(bus=self.bus).encode()
             elif img_code == 3:
                 # light rain
-                icon = "IIMAOJOFPBPJPFOBMA"
+                icon = LightRainIcon(bus=self.bus).encode()
             elif img_code == 4:
                 # raining
-                icon = "IIMIOFOBPFPDPJOFMA"
+                icon = RainIcon(bus=self.bus).encode()
             elif img_code == 5:
                 # storming
-                icon = "IIAAIIMEODLBJAAAAA"
+                icon = StormIcon(bus=self.bus).encode()
             elif img_code == 6:
                 # snowing
-                icon = "IIJEKCMBPHMBKCJEAA"
+                icon = SnowIcon(bus=self.bus).encode()
             elif img_code == 7:
                 # wind/mist
-                icon = "IIABIBIBIJIJJGJAGA"
+                icon = WindIcon(bus=self.bus).encode()
 
             temp = message.data.get("temp", None)
             if icon is not None and temp is not None:
