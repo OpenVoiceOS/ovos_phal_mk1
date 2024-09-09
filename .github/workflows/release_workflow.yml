@@ -18,6 +18,7 @@ jobs:
       changelog_max_issues: 100
     permissions:
       id-token: write
+      contents: write
 
   propose_release:
     needs: publish_alpha
