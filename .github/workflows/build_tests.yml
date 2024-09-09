@@ -34,7 +34,7 @@ jobs:
       - name: Build Distribution Packages
         run: |
           python setup.py bdist_wheel
-      - name: Install skill
+      - name: Install repo
         run: |
           pip install .
       - uses: pypa/gh-action-pip-audit@v1.0.8
