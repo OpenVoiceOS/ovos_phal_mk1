@@ -8,6 +8,7 @@ on:
 jobs:
   publish_alpha:
     uses: TigreGotico/gh-automations/.github/workflows/publish-alpha.yml@master
+    secrets: inherit
     with:
       branch: 'dev'
       version_file: 'ovos_PHAL_plugin_mk1/version.py'
