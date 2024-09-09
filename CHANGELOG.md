@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1a1](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/tree/0.1.1a1) (2024-09-09)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/compare/0.1.0a2...0.1.1a1)
+
+**Merged pull requests:**
+
+- perms? [\#18](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/pull/18) ([JarbasAl](https://github.com/JarbasAl))
+- packaging:ovos-mark1-utils\>=0.0.1 [\#17](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/pull/17) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.0a2](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/tree/0.1.0a2) (2024-09-09)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/compare/V0.0.1a5...0.1.0a2)
