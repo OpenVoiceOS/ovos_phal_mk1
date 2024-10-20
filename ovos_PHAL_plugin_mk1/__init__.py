@@ -598,6 +598,7 @@ class MycroftMark1(PHALPlugin):
     def on_display_date(self, message=None):
         self._deactivate_mouth_events()
         self.on_text(message)
+        sleep(10)
         self._activate_mouth_events()
 
     def on_display_time(self, message=None):
@@ -655,10 +656,11 @@ class MycroftMark1(PHALPlugin):
             self.on_display(Message("", data={"img_code": "CIAAAA", "xOffset": 29, "clear_previous": False}))
             # self.enclosure.mouth_display(img_code="CIAAAA", x=29,
             #                             refresh=False)
-            time.sleep(5)
+            
             self.on_display_reset()
             # self.enclosure.mouth_reset()
             # self.enclosure.activate_mouth_events()
 
             self.on_text(message)
+            sleep(5)
             self._activate_mouth_events()
