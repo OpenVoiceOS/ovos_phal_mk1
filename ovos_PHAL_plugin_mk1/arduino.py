@@ -66,6 +66,7 @@ class EnclosureReader(Thread):
             # This happens in response to the "system.version" message
             # sent during the construction of Enclosure()
             self.bus.emit(Message("enclosure.started"))
+            self.bus.emit(Message("version"))
 
         if "mycroft.stop" in data:
             if self.button_callback:
@@ -142,15 +143,19 @@ class EnclosureWriter(Thread):
         self.start()
 
     def flush(self):
+        LOG.debug(f"alive in flush  {self.is_alive}")
         while self.alive:
             try:
                 cmd = self.commands.get() + '\n'
+                LOG.debug(f"in arduino.flush {cmd}")
                 self.serial.write(cmd.encode())
                 self.commands.task_done()
             except Exception as e:
                 LOG.error("Writing error: {0}".format(e))
+        LOG.debug("not alive anymore")
 
     def write(self, command):
+        LOG.debug(f"command in writer write {command}")
         self.commands.put(str(command))
 
     def stop(self):
