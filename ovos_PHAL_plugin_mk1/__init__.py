@@ -85,6 +85,9 @@ class MycroftMark1(PHALPlugin):
         self.bus.on("mycroft.audio.service.play", self.on_music)
         self.bus.on("mycroft.audio.service.stop", self.on_display_reset)
 
+        self.bus.on("ovos.mk1.display_date", self.on_display_date)
+        self.bus.on("ovos.mk1.display_time", self.on_display_time)
+
         self.bus.emit(Message("system.factory.reset.register",
                               {"skill_id": "ovos-phal-plugin-mk1"}))
 
@@ -516,10 +519,11 @@ class MycroftMark1(PHALPlugin):
         y_offset = ""
         clear_previous = ""
         if message and message.data:
+            LOG.debug(f"message data in on_display: {message.data}")
             code = message.data.get("img_code", code)
             x_offset = int(message.data.get("xOffset", x_offset))
             y_offset = int(message.data.get("yOffset", y_offset))
-            clear_previous = message.data.get("clearPrev", clear_previous)
+            clear_previous = message.data.get("clear_previous", clear_previous)
 
         clear_previous = int(str(clear_previous) == "True")
         clear_previous = "cP=" + str(clear_previous) + ","
@@ -589,3 +593,72 @@ class MycroftMark1(PHALPlugin):
                 icon = "x=2," + icon
                 msg = "weather.display=" + str(temp) + "," + str(icon)
                 self.writer.write(msg)
+
+    # date/time
+    def on_display_date(self, message=None):
+        self._deactivate_mouth_events()
+        self.on_text(message)
+        self._activate_mouth_events()
+
+    def on_display_time(self, message=None):
+        LOG.debug(f"displaying time: {message.data}")
+        code_dict = {
+            ':': 'CIICAA',
+            '0': 'EIMHEEMHAA',
+            '1': 'EIIEMHAEAA',
+            '2': 'EIEHEFMFAA',
+            '3': 'EIEFEFMHAA',
+            '4': 'EIMBABMHAA',
+            '5': 'EIMFEFEHAA',
+            '6': 'EIMHEFEHAA',
+            '7': 'EIEAEAMHAA',
+            '8': 'EIMHEFMHAA',
+            '9': 'EIMBEBMHAA',
+        }
+
+        if message and message.data:
+            self._deactivate_mouth_events()
+            LOG.debug(f"full message: {message.data}")
+            display_time = message.data.get("text")
+            LOG.debug(f"display_time: {display_time}")
+            # clear screen (draw two blank sections, numbers cover rest)
+            if len(display_time) == 4:
+                # for 4-character times, 9x8 blank
+                self.on_display(Message.forward("", data={"img_code": "JIAAAAAAAAAAAAAAAAAA", "clear_previous": False}))
+                # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
+                                            # refresh=False)
+                self.on_display(Message.forward("", data={"img_code": "JIAAAAAAAAAAAAAAAAAA", "xOffset": 22, "clear_previous": False}))
+                # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
+                #                              x=22, refresh=False)
+            else:
+                # for 5-character times, 7x8 blank
+                self.on_display(Message.forward("", data={"img_code": "HIAAAAAAAAAAAAAA", "clear_previous": False}))
+                # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
+                #                              refresh=False)
+                self.on_display(Message.forward("", data={"img_code": "HIAAAAAAAAAAAAAA", "xOffset": 24, "clear_previous": False}))
+                # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
+                #                              x=24, refresh=False)
+
+            # draw the time, centered on display
+            xoffset = (32 - (4 * (len(display_time)) - 2)) / 2
+            for c in display_time:
+                if c in code_dict:
+                    LOG.debug(f"testing: {c}")
+                    self.on_display(Message("", data={"img_code": code_dict[c], "xOffset": xoffset, "clear_previous": False}))
+                    # self.enclosure.mouth_display(img_code=code_dict[c],
+                    #                             x=xoffset, refresh=False)
+                    if c == ":":
+                        xoffset += 2  # colon is 1 pixels + a space
+                    else:
+                        xoffset += 4  # digits are 3 pixels + a space
+
+            self.on_display(Message("", data={"img_code": "CIAAAA", "xOffset": 29, "clear_previous": False}))
+            # self.enclosure.mouth_display(img_code="CIAAAA", x=29,
+            #                             refresh=False)
+            time.sleep(5)
+            self.on_display_reset()
+            # self.enclosure.mouth_reset()
+            # self.enclosure.activate_mouth_events()
+
+            self.on_text(message)
+            self._activate_mouth_events()
