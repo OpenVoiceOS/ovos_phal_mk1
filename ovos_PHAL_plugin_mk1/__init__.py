@@ -476,7 +476,29 @@ class MycroftMark1(PHALPlugin):
         text = message.data.get("text", "")
         self.writer.write("mouth.text=" + text)
 
-    def _do_display(self, img_code: str, x_offset: int = 0, y_offset: int = 0, refresh: bool = True):
+    def on_display(self, message: Message):
+        """Display images on faceplate. Currently supports images up to 16x8,
+           or half the face. You can use the 'x' parameter to cover the other
+           half of the faceplate.
+
+       triggered by "enclosure.mouth.display"
+
+        Args:
+            img_code (str): text string that encodes a black and white image
+            x (int): x offset for image
+            y (int): y offset for image
+            refresh (bool): specify whether to clear the faceplate before
+                            displaying the new image or not.
+                            Useful if you'd like to display muliple images
+                            on the faceplate at once.
+        """
+        code = message.data.get("img_code", "")
+        x_offset = int(message.data.get("xOffset", 0))
+        y_offset = int(message.data.get("yOffset", 0))
+        clear_previous = message.data.get("clearPrev", "")
+        self._do_display(code, int(x_offset), int(y_offset), clear_previous.lower() == "true")
+
+    def _do_display(self, img_code: str, x_offset: int = 0, y_offset: int = 0, refresh: bool = False):
         """Display images on faceplate. Currently supports images up to 16x8,
            or half the face. You can use the 'x' parameter to cover the other
            half of the faceplate.
