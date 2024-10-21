@@ -66,7 +66,6 @@ class EnclosureReader(Thread):
             # This happens in response to the "system.version" message
             # sent during the construction of Enclosure()
             self.bus.emit(Message("enclosure.started"))
-            self.bus.emit(Message("version"))
 
         if "mycroft.stop" in data:
             if self.button_callback:

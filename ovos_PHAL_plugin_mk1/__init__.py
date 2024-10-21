@@ -618,38 +618,37 @@ class MycroftMark1(PHALPlugin):
             '9': 'EIMBEBMHAA',
         }
 
-        if message and message.data:
-            self._deactivate_mouth_events()
-            display_time = message.data.get("text")
-            # clear screen (draw two blank sections, numbers cover rest)
-            if len(display_time) == 4:
-                # for 4-character times, 9x8 blank
-                self.on_display(Message("", data={"img_code": "JIAAAAAAAAAAAAAAAAAA", "clear_previous": False}))
-                # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
-                                            # refresh=False)
-                self.on_display(Message("", data={"img_code": "JIAAAAAAAAAAAAAAAAAA", "xOffset": 22, "clear_previous": False}))
-                # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
-                #                              x=22, refresh=False)
-            else:
-                # for 5-character times, 7x8 blank
-                self.on_display(Message("", data={"img_code": "HIAAAAAAAAAAAAAA", "clear_previous": False}))
-                # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
-                #                              refresh=False)
-                self.on_display(Message("", data={"img_code": "HIAAAAAAAAAAAAAA", "xOffset": 24, "clear_previous": False}))
-                # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
-                #                              x=24, refresh=False)
+        self._deactivate_mouth_events()
+        display_time = message.data.get("text")
+        # clear screen (draw two blank sections, numbers cover rest)
+        if len(display_time) == 4:
+            # for 4-character times, 9x8 blank
+            self.on_display(Message("", data={"img_code": "JIAAAAAAAAAAAAAAAAAA", "clear_previous": False}))
+            # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
+                                        # refresh=False)
+            self.on_display(Message("", data={"img_code": "JIAAAAAAAAAAAAAAAAAA", "xOffset": 22, "clear_previous": False}))
+            # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
+            #                              x=22, refresh=False)
+        else:
+            # for 5-character times, 7x8 blank
+            self.on_display(Message("", data={"img_code": "HIAAAAAAAAAAAAAA", "clear_previous": False}))
+            # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
+            #                              refresh=False)
+            self.on_display(Message("", data={"img_code": "HIAAAAAAAAAAAAAA", "xOffset": 24, "clear_previous": False}))
+            # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
+            #                              x=24, refresh=False)
 
-            # draw the time, centered on display
-            xoffset = (32 - (4 * (len(display_time)) - 2)) / 2
-            for c in display_time:
-                if c in code_dict:
-                    self.on_display(Message("", data={"img_code": code_dict[c], "xOffset": xoffset, "clear_previous": False}))
-                    if c == ":":
-                        xoffset += 2  # colon is 1 pixels + a space
-                    else:
-                        xoffset += 4  # digits are 3 pixels + a space
+        # draw the time, centered on display
+        xoffset = (32 - (4 * (len(display_time)) - 2)) / 2
+        for c in display_time:
+            if c in code_dict:
+                self.on_display(Message("", data={"img_code": code_dict[c], "xOffset": xoffset, "clear_previous": False}))
+                if c == ":":
+                    xoffset += 2  # colon is 1 pixels + a space
+                else:
+                    xoffset += 4  # digits are 3 pixels + a space
 
-            self.on_display(Message("", data={"img_code": "CIAAAA", "xOffset": 29, "clear_previous": False}))
-            sleep(5)
-            self.on_display_reset()
-            self._activate_mouth_events()
+        self.on_display(Message("", data={"img_code": "CIAAAA", "xOffset": 29, "clear_previous": False}))
+        sleep(5)
+        self.on_display_reset()
+        self._activate_mouth_events()
