@@ -1,17 +1,16 @@
-import time
-from threading import Event
-from time import sleep
-
 import serial
+import time
 from ovos_bus_client.message import Message
+from ovos_mark1.faceplate.icons import MusicIcon, WarningIcon, SnowIcon, StormIcon, SunnyIcon, \
+    CloudyIcon, PartlyCloudyIcon, WindIcon, RainIcon, LightRainIcon
+from ovos_plugin_manager.phal import PHALPlugin
 from ovos_utils import create_daemon
 from ovos_utils.log import LOG
 from ovos_utils.network_utils import is_connected
+from threading import Event
+from time import sleep
 
-from ovos_mark1.faceplate.icons import MusicIcon, WarningIcon, SnowIcon, StormIcon, SunnyIcon, \
-    CloudyIcon, PartlyCloudyIcon, WindIcon, RainIcon, LightRainIcon
 from ovos_PHAL_plugin_mk1.arduino import EnclosureReader, EnclosureWriter
-from ovos_plugin_manager.phal import PHALPlugin
 
 
 # The Mark 1 hardware consists of a Raspberry Pi main CPU which is connected
@@ -84,6 +83,9 @@ class MycroftMark1(PHALPlugin):
         self.bus.on("ovos.common_play.stop", self.on_display_reset)
         self.bus.on("mycroft.audio.service.play", self.on_music)
         self.bus.on("mycroft.audio.service.stop", self.on_display_reset)
+
+        self.bus.on("ovos.mk1.display_date", self.on_display_date)
+        self.bus.on("ovos.mk1.display_time", self.on_display_time)
 
         self.bus.emit(Message("system.factory.reset.register",
                               {"skill_id": "ovos-phal-plugin-mk1"}))
@@ -495,7 +497,7 @@ class MycroftMark1(PHALPlugin):
             text = message.data.get("text", text)
         self.writer.write("mouth.text=" + text)
 
-    def on_display(self, message=None):
+    def _do_display(self, img_code: str, x_offset: int = 0, y_offset: int = 0, refresh: bool = True):
         """Display images on faceplate. Currently supports images up to 16x8,
            or half the face. You can use the 'x' parameter to cover the other
            half of the faceplate.
@@ -511,22 +513,13 @@ class MycroftMark1(PHALPlugin):
                             Useful if you'd like to display muliple images
                             on the faceplate at once.
         """
-        code = ""
-        x_offset = ""
-        y_offset = ""
-        clear_previous = ""
-        if message and message.data:
-            code = message.data.get("img_code", code)
-            x_offset = int(message.data.get("xOffset", x_offset))
-            y_offset = int(message.data.get("yOffset", y_offset))
-            clear_previous = message.data.get("clearPrev", clear_previous)
 
-        clear_previous = int(str(clear_previous) == "True")
+        clear_previous = int(refresh)
         clear_previous = "cP=" + str(clear_previous) + ","
         x_offset = "x=" + str(x_offset) + ","
         y_offset = "y=" + str(y_offset) + ","
 
-        message = "mouth.icon=" + x_offset + y_offset + clear_previous + code
+        message = "mouth.icon=" + x_offset + y_offset + clear_previous + img_code
         # Check if message exceeds Arduino's serial buffer input limit 64 bytes
         if len(message) > 60:
             message1 = message[:31] + "$"
@@ -538,7 +531,7 @@ class MycroftMark1(PHALPlugin):
             sleep(0.1)
             self.writer.write(message)
 
-    def on_weather_display(self, message=None):
+    def on_weather_display(self, message):
         """Show a the temperature and a weather icon
 
         triggered by "enclosure.weather.display"
@@ -555,37 +548,94 @@ class MycroftMark1(PHALPlugin):
                          7 = wind/mist
             temp (int): the temperature (either C or F, not indicated)
         """
-        if message and message.data:
-            # Convert img_code to icon
-            img_code = message.data.get("img_code", None)
-            icon = None
-            if img_code == 0:
-                # sunny
-                icon = SunnyIcon(bus=self.bus).encode()
-            elif img_code == 1:
-                # partly cloudy
-                icon = PartlyCloudyIcon(bus=self.bus).encode()
-            elif img_code == 2:
-                # cloudy
-                icon = CloudyIcon(bus=self.bus).encode()
-            elif img_code == 3:
-                # light rain
-                icon = LightRainIcon(bus=self.bus).encode()
-            elif img_code == 4:
-                # raining
-                icon = RainIcon(bus=self.bus).encode()
-            elif img_code == 5:
-                # storming
-                icon = StormIcon(bus=self.bus).encode()
-            elif img_code == 6:
-                # snowing
-                icon = SnowIcon(bus=self.bus).encode()
-            elif img_code == 7:
-                # wind/mist
-                icon = WindIcon(bus=self.bus).encode()
+        # Convert img_code to icon
+        img_code = message.data.get("img_code", None)
+        icon = None
+        if img_code == 0:
+            # sunny
+            icon = SunnyIcon(bus=self.bus).encode()
+        elif img_code == 1:
+            # partly cloudy
+            icon = PartlyCloudyIcon(bus=self.bus).encode()
+        elif img_code == 2:
+            # cloudy
+            icon = CloudyIcon(bus=self.bus).encode()
+        elif img_code == 3:
+            # light rain
+            icon = LightRainIcon(bus=self.bus).encode()
+        elif img_code == 4:
+            # raining
+            icon = RainIcon(bus=self.bus).encode()
+        elif img_code == 5:
+            # storming
+            icon = StormIcon(bus=self.bus).encode()
+        elif img_code == 6:
+            # snowing
+            icon = SnowIcon(bus=self.bus).encode()
+        elif img_code == 7:
+            # wind/mist
+            icon = WindIcon(bus=self.bus).encode()
 
-            temp = message.data.get("temp", None)
-            if icon is not None and temp is not None:
-                icon = "x=2," + icon
-                msg = "weather.display=" + str(temp) + "," + str(icon)
-                self.writer.write(msg)
+        temp = message.data.get("temp", None)
+        if icon is not None and temp is not None:
+            icon = "x=2," + icon
+            msg = "weather.display=" + str(temp) + "," + str(icon)
+            self.writer.write(msg)
+
+    # date/time
+    def on_display_date(self, message=None):
+        self._deactivate_mouth_events()
+        self.on_text(message)
+        sleep(10)
+        self.on_display_reset()
+        self._activate_mouth_events()
+
+    def on_display_time(self, message=None):
+        code_dict = {
+            ':': 'CIICAA',
+            '0': 'EIMHEEMHAA',
+            '1': 'EIIEMHAEAA',
+            '2': 'EIEHEFMFAA',
+            '3': 'EIEFEFMHAA',
+            '4': 'EIMBABMHAA',
+            '5': 'EIMFEFEHAA',
+            '6': 'EIMHEFEHAA',
+            '7': 'EIEAEAMHAA',
+            '8': 'EIMHEFMHAA',
+            '9': 'EIMBEBMHAA',
+        }
+
+        self._deactivate_mouth_events()
+        display_time = message.data.get("text")
+        # clear screen (draw two blank sections, numbers cover rest)
+        if len(display_time) == 4:
+            # for 4-character times, 9x8 blank
+            self._do_display(img_code="JIAAAAAAAAAAAAAAAAAA", refresh=False)
+            # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
+            # refresh=False)
+            self._do_display(img_code="JIAAAAAAAAAAAAAAAAAA", x_offset=22, refresh=False)
+            # self.enclosure.mouth_display(img_code="JIAAAAAAAAAAAAAAAAAA",
+            #                              x=22, refresh=False)
+        else:
+            # for 5-character times, 7x8 blank
+            self._do_display(img_code="HIAAAAAAAAAAAAAA", refresh=False)
+            # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
+            #                              refresh=False)
+            self._do_display(img_code="HIAAAAAAAAAAAAAA", x_offset=24, refresh=False)
+            # self.enclosure.mouth_display(img_code="HIAAAAAAAAAAAAAA",
+            #                              x=24, refresh=False)
+
+        # draw the time, centered on display
+        xoffset = (32 - (4 * (len(display_time)) - 2)) / 2
+        for c in display_time:
+            if c in code_dict:
+                self._do_display(code_dict[c], x_offset=xoffset, refresh=False)
+                if c == ":":
+                    xoffset += 2  # colon is 1 pixels + a space
+                else:
+                    xoffset += 4  # digits are 3 pixels + a space
+
+        self._do_display("CIAAAA", x_offset=29, refresh=False)
+        sleep(5)
+        self.on_display_reset()
+        self._activate_mouth_events()
