@@ -1,5 +1,9 @@
-import serial
 import time
+from threading import Event
+from time import sleep
+from typing import Optional
+
+import serial
 from ovos_bus_client.message import Message
 from ovos_mark1.faceplate.icons import MusicIcon, WarningIcon, SnowIcon, StormIcon, SunnyIcon, \
     CloudyIcon, PartlyCloudyIcon, WindIcon, RainIcon, LightRainIcon
@@ -7,8 +11,6 @@ from ovos_plugin_manager.phal import PHALPlugin
 from ovos_utils import create_daemon
 from ovos_utils.log import LOG
 from ovos_utils.network_utils import is_connected
-from threading import Event
-from time import sleep
 
 from ovos_PHAL_plugin_mk1.arduino import EnclosureReader, EnclosureWriter
 
@@ -146,7 +148,7 @@ class MycroftMark1(PHALPlugin):
             LOG.exception(f"Impossible to connect to serial: {self.port}")
             raise
 
-    def __reset(self, message: Message):
+    def __reset(self, message: Optional[Message] = None):
         self.writer.write("eyes.reset")
         self.writer.write("mouth.reset")
 
@@ -156,10 +158,10 @@ class MycroftMark1(PHALPlugin):
         else:
             self.bus.emit(Message("mycroft.mic.listen"))
 
-    def on_music(self, message: Message):
+    def on_music(self, message: Optional[Message] = None):
         MusicIcon(bus=self.bus).display()
 
-    def handle_get_color(self, message):
+    def handle_get_color(self, message: Message):
         """Get the eye RGB color for all pixels
         Returns:
            (list) list of (r,g,b) tuples for each eye pixel
@@ -167,36 +169,36 @@ class MycroftMark1(PHALPlugin):
         self.bus.emit(message.reply("enclosure.eyes.rgb",
                                     {"pixels": self._current_rgb}))
 
-    def handle_factory_reset(self, message):
+    def handle_factory_reset(self, message: Optional[Message] = None):
         self.writer.write("eyes.spin")
         self.writer.write("mouth.reset")
         # TODO re-flash firmware to faceplate
 
-    def handle_register_factory_reset_handler(self, message):
+    def handle_register_factory_reset_handler(self, message: Message):
         self.bus.emit(message.reply("system.factory.reset.register",
                                     {"skill_id": "ovos-phal-plugin-mk1"}))
 
     # Audio Events
-    def on_record_begin(self, message: Message):
+    def on_record_begin(self, message: Optional[Message] = None):
         # NOTE: ignore self._mouth_events, listening should ALWAYS be obvious
         self.listening = True
         self.on_listen(message)
 
-    def on_record_end(self, message: Message):
+    def on_record_end(self, message: Optional[Message] = None):
         self.listening = False
         self.on_display_reset(message)
 
-    def on_audio_output_start(self, message: Message):
+    def on_audio_output_start(self, message: Optional[Message] = None):
         self.speaking = True
         if self._mouth_events:
             self.on_talk(message)
 
-    def on_audio_output_end(self, message: Message):
+    def on_audio_output_end(self, message: Optional[Message] = None):
         self.speaking = False
         if self._mouth_events:
             self.on_display_reset(message)
 
-    def on_awake(self, message: Message):
+    def on_awake(self, message: Optional[Message] = None):
         ''' on wakeup animation
         triggered by "mycroft.awoken"
         '''
@@ -207,7 +209,7 @@ class MycroftMark1(PHALPlugin):
         # brighten the rest of the way
         self.writer.write("eyes.level=" + str(self.old_brightness))
 
-    def on_sleep(self, message: Message):
+    def on_sleep(self, message: Optional[Message] = None):
         ''' on naptime animation
         triggered by "recognizer_loop:sleep"
         '''
@@ -220,7 +222,7 @@ class MycroftMark1(PHALPlugin):
             time.sleep(0.15)
         self.writer.write("eyes.look=d")
 
-    def on_reset(self, message: Message):
+    def on_reset(self, message: Optional[Message] = None):
         """The enclosure should restore itself to a started state.
         Typically this would be represented by the eyes being 'open'
         and the mouth reset to its default (smile or blank).
@@ -230,31 +232,31 @@ class MycroftMark1(PHALPlugin):
         self.writer.write("mouth.reset")
 
     # System Events
-    def on_no_internet(self, message: Message):
+    def on_no_internet(self, message: Optional[Message] = None):
         """
         triggered by "enclosure.notify.no_internet"
         """
         WarningIcon(bus=self.bus).display()
 
-    def on_system_reset(self, message: Message):
+    def on_system_reset(self, message: Optional[Message] = None):
         """The enclosure hardware should reset any CPUs, etc.
         triggered by "enclosure.system.reset"
         """
         self.writer.write("system.reset")
 
-    def on_system_mute(self, message: Message):
+    def on_system_mute(self, message: Optional[Message] = None):
         """Mute (turn off) the system speaker.
         triggered by "enclosure.system.mute"
         """
         self.writer.write("system.mute")
 
-    def on_system_unmute(self, message: Message):
+    def on_system_unmute(self, message: Optional[Message] = None):
         """Unmute (turn on) the system speaker.
         triggered by "enclosure.system.unmute"
         """
         self.writer.write("system.unmute")
 
-    def on_system_blink(self, message: Message):
+    def on_system_blink(self, message: Optional[Message] = None):
         """The 'eyes' should blink the given number of times.
         triggered by "enclosure.system.blink"
 
@@ -262,17 +264,18 @@ class MycroftMark1(PHALPlugin):
             times (int): number of times to blink
         """
         times = 1
-        times = message.data.get("times", times)
+        if message:
+            times = message.data.get("times", times)
         self.writer.write("system.blink=" + str(times))
 
     # Eyes messages
-    def on_eyes_on(self, message: Message):
+    def on_eyes_on(self, message: Optional[Message] = None):
         """Illuminate or show the eyes.
         triggered by "enclosure.eyes.on"
         """
         self.writer.write("eyes.on")
 
-    def on_eyes_off(self, message: Message):
+    def on_eyes_off(self, message: Optional[Message] = None):
         """Turn off or hide the eyes.
         triggered by "enclosure.eyes.off"
         """
@@ -284,16 +287,17 @@ class MycroftMark1(PHALPlugin):
         amount = int(round(23.0 * percent / 100.0))
         self.writer.write("eyes.fill=" + str(amount))
 
-    def on_eyes_blink(self, message: Message):
+    def on_eyes_blink(self, message: Optional[Message] = None):
         """Make the eyes blink
         triggered by "enclosure.eyes.blink"
         Args:
             side (str): 'r', 'l', or 'b' for 'right', 'left' or 'both'
         """
-        side = message.data.get("side", "b")
+        if message:
+            side = message.data.get("side", "b")
         self.writer.write("eyes.blink=" + side)
 
-    def on_eyes_narrow(self, message: Message):
+    def on_eyes_narrow(self, message: Optional[Message] = None):
         """Make the eyes look narrow, like a squint
         triggered by "enclosure.eyes.narrow"
         """
@@ -336,7 +340,7 @@ class MycroftMark1(PHALPlugin):
         level = message.data.get("level", 30)
         self.writer.write("eyes.level=" + str(level))
 
-    def on_eyes_reset(self, message: Message):
+    def on_eyes_reset(self, message: Optional[Message] = None):
         """Restore the eyes to their default (ready) state
         triggered by "enclosure.eyes.reset".
         """
@@ -360,7 +364,7 @@ class MycroftMark1(PHALPlugin):
         volume = message.data.get("volume", 4)
         self.writer.write("eyes.volume=" + str(volume))
 
-    def on_eyes_spin(self, message: Message):
+    def on_eyes_spin(self, message: Optional[Message] = None):
         """
         triggered by "enclosure.eyes.spin"
         """
@@ -379,31 +383,31 @@ class MycroftMark1(PHALPlugin):
         self.writer.write("eyes.set=" + str(idx) + "," + str(color))
 
     # Display (faceplate) messages
-    def on_display_reset(self, message: Message):
+    def on_display_reset(self, message: Optional[Message] = None):
         """Restore the mouth display to normal (blank)
         triggered by "enclosure.mouth.reset" / "recognizer_loop:record_end"
         """
         self.writer.write("mouth.reset")
 
-    def on_talk(self, message: Message):
+    def on_talk(self, message: Optional[Message] = None):
         """Show a generic 'talking' animation for non-synched speech
         triggered by "enclosure.mouth.talk"
         """
         self.writer.write("mouth.talk")
 
-    def on_think(self, message: Message):
+    def on_think(self, message: Optional[Message] = None):
         """Show a 'thinking' image or animation
         triggered by "enclosure.mouth.think"
         """
         self.writer.write("mouth.think")
 
-    def on_listen(self, message: Message):
+    def on_listen(self, message: Optional[Message] = None):
         """Show a 'thinking' image or animation
         triggered by "enclosure.mouth.listen" / "recognizer_loop:record_begin"
         """
         self.writer.write("mouth.listen")
 
-    def on_smile(self, message: Message):
+    def on_smile(self, message: Optional[Message] = None):
         """Show a 'smile' image or animation
         triggered by "enclosure.mouth.smile"
         """
@@ -532,7 +536,7 @@ class MycroftMark1(PHALPlugin):
             sleep(0.1)
             self.writer.write(message)
 
-    def on_weather_display(self, message):
+    def on_weather_display(self, message: Message):
         """Show a the temperature and a weather icon
 
         triggered by "enclosure.weather.display"
@@ -627,7 +631,7 @@ class MycroftMark1(PHALPlugin):
             #                              x=24, refresh=False)
 
         # draw the time, centered on display
-        xoffset = (32 - (4 * (len(display_time)) - 2)) / 2
+        xoffset = int((32 - (4 * (len(display_time)) - 2)) / 2)
         for c in display_time:
             if c in code_dict:
                 self._do_display(code_dict[c], x_offset=xoffset, refresh=False)
