@@ -11,6 +11,7 @@ from ovos_plugin_manager.phal import PHALPlugin
 from ovos_utils import create_daemon
 from ovos_utils.log import LOG
 from ovos_utils.network_utils import is_connected
+from ovos_i2c_detection import is_mark_1
 
 from ovos_PHAL_plugin_mk1.arduino import EnclosureReader, EnclosureWriter
 
@@ -30,9 +31,9 @@ class MycroftMark1Validator:
         """ this method is called before loading the plugin.
         If it returns False the plugin is not loaded.
         This allows a plugin to run platform checks"""
-        # TODO how to detect if running in a mark1 ?
-        #  detect "/dev/ttyAMA0" ?
-        return True
+        if is_mark_1():
+            return True
+        return False
 
 
 class MycroftMark1(PHALPlugin):
