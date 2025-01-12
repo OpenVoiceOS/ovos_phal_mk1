@@ -32,7 +32,7 @@ class MycroftMark1Validator:
         """ this method is called before loading the plugin.
         If it returns False the plugin is not loaded.
         This allows a plugin to run platform checks"""
-        cfg = config or Configuration().get("PHAL", {}).get("ovos-PHAL-plugin-mk1")
+        cfg = config or Configuration().get("PHAL", {}).get("ovos-PHAL-plugin-mk1", {})
         if cfg and cfg.get("enabled") == True:
             return True
         if is_mark_1():
