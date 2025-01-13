@@ -1,16 +1,16 @@
 # Changelog
 
-## [0.1.3a1](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/tree/0.1.3a1) (2024-10-23)
+## [0.1.4a2](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/tree/0.1.4a2) (2025-01-11)
 
-[Full Changelog](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/compare/V0.1.2...0.1.3a1)
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/compare/V0.1.3...0.1.4a2)
 
 **Merged pull requests:**
 
-- feat/time\_utils [\#15](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/pull/15) ([JarbasAl](https://github.com/JarbasAl))
+- added validation using ovos-i2c-detection [\#24](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/pull/24) ([builderjer](https://github.com/builderjer))
 
-## [V0.1.2](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/tree/V0.1.2) (2024-09-09)
+## [V0.1.3](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/tree/V0.1.3) (2024-10-23)
 
-[Full Changelog](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/compare/0.1.2...V0.1.2)
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-PHAL-plugin-mk1/compare/0.1.3...V0.1.3)
 
 
 
